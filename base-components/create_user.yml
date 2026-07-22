@@ -1,0 +1,39 @@
+---
+- name: Create user access
+  hosts: localhost
+  connection: local
+  become: true
+
+  tasks:
+    - name: Fetch public key from SSM
+      ansible.builtin.command:
+        cmd: >
+          aws ssm get-parameter
+          --name /devopswiki/yaw_public_key
+          --with-decryption
+          --query Parameter.Value
+          --output text
+          --region eu-west-3
+      register: ssm_key
+      changed_when: false
+
+    - name: Create user yaw
+      ansible.builtin.user:
+        name: yaw
+        shell: /bin/bash
+        create_home: true
+
+    - name: Add authorized key
+      ansible.posix.authorized_key:
+        user: yaw
+        key: "{{ ssm_key.stdout }}"
+        state: present
+
+    - name: Grant passwordless sudo
+      ansible.builtin.copy:
+        dest: /etc/sudoers.d/yaw
+        content: "yaw ALL=(ALL) NOPASSWD:ALL\n"
+        owner: root
+        group: root
+        mode: "0440"
+        validate: /usr/sbin/visudo -cf %s

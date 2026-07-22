@@ -1,0 +1,48 @@
+---
+- name: Write backend env file
+  hosts: localhost
+  connection: local
+  become: true
+
+  tasks:
+    - name: Fetch postgres user from SSM
+      ansible.builtin.command:
+        cmd: >
+          aws ssm get-parameter
+          --name /devopswiki/testbed/postgres_user
+          --with-decryption
+          --query Parameter.Value
+          --output text
+          --region eu-west-3
+      register: pg_user
+      changed_when: false
+
+    - name: Fetch postgres password from SSM
+      ansible.builtin.command:
+        cmd: >
+          aws ssm get-parameter
+          --name /devopswiki/testbed/postgres_password
+          --with-decryption
+          --query Parameter.Value
+          --output text
+          --region eu-west-3
+      register: pg_password
+      changed_when: false
+
+    - name: Create /opt/app directory
+      ansible.builtin.file:
+        path: /opt/app
+        state: directory
+        owner: yaw
+        group: yaw
+        mode: "0755"
+
+    - name: Write .env file
+      ansible.builtin.copy:
+        dest: /opt/app/.env
+        owner: yaw
+        group: yaw
+        mode: "0600"
+        content: |
+          POSTGRES_USER={{ pg_user.stdout }}
+          POSTGRES_PASSWORD={{ pg_password.stdout }}
