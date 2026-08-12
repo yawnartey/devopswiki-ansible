@@ -1,7 +1,6 @@
 ---
 - name: Write backend env file
   hosts: localhost
-  connection: local
   become: true
 
   tasks:
