@@ -5,10 +5,10 @@
   become: true
 
   vars:
-    domain: test.devopswiki.info
+    # domain: test.devopswiki.info
     email: yawenochnartey@gmail.com
     s3_bucket: devops-wiki-letsencrypt-c9123c3a736c3547
-    s3_path: testbed/letsencrypt
+    s3_path: "{{ env }}/letsencrypt"
     cert_path: /etc/letsencrypt/live/{{ domain }}/fullchain.pem
 
   tasks:
@@ -27,7 +27,7 @@
 
     - name: Restore letsencrypt from S3
       ansible.builtin.command:
-        cmd: aws s3 cp s3://{{ s3_bucket }}/{{ s3_path }} /etc/letsencrypt --recursive --region eu-west-3
+        cmd: aws s3 cp s3://{{ s3_bucket }}/{{ s3_path }} /etc/letsencrypt --recursive --region {{ region }}
       failed_when: false
       changed_when: false
 
@@ -58,7 +58,7 @@
 
     - name: Backup new certificate to S3
       ansible.builtin.command:
-        cmd: aws s3 cp /etc/letsencrypt s3://{{ s3_bucket }}/{{ s3_path }} --recursive --region eu-west-3
+        cmd: aws s3 cp /etc/letsencrypt s3://{{ s3_bucket }}/{{ s3_path }} --recursive --region {{ region }}
       when: not cert_file.stat.exists
       changed_when: true
 

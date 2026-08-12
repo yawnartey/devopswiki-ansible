@@ -1,7 +1,6 @@
 ---
 - name: Install Docker and Docker Compose
   hosts: localhost
-  connection: local
   become: true
 
   tasks:
@@ -24,6 +23,6 @@
 
     - name: Download Docker Compose
       ansible.builtin.get_url:
-        url: https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64
+        url: https://github.com/docker/compose/releases/download/v2.29.1/docker-compose-linux-x86_64
         dest: /usr/local/bin/docker-compose
         mode: "0755"
