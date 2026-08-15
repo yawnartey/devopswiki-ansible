@@ -1,7 +1,6 @@
 ---
 - name: Write backend env file
   hosts: localhost
-  connection: local
   become: true
 
   tasks:
@@ -9,11 +8,11 @@
       ansible.builtin.command:
         cmd: >
           aws ssm get-parameter
-          --name /devopswiki/testbed/postgres_user
+          --name /devopswiki/{{ env }}/postgres_user
           --with-decryption
           --query Parameter.Value
           --output text
-          --region eu-west-3
+          --region {{ region }}
       register: pg_user
       changed_when: false
 
@@ -21,11 +20,11 @@
       ansible.builtin.command:
         cmd: >
           aws ssm get-parameter
-          --name /devopswiki/testbed/postgres_password
+          --name /devopswiki/{{ env }}/postgres_password
           --with-decryption
           --query Parameter.Value
           --output text
-          --region eu-west-3
+          --region {{ region }}
       register: pg_password
       changed_when: false
 

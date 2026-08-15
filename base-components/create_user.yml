@@ -1,7 +1,6 @@
 ---
 - name: Create user access
   hosts: localhost
-  connection: local
   become: true
 
   tasks:
@@ -13,7 +12,7 @@
           --with-decryption
           --query Parameter.Value
           --output text
-          --region eu-west-3
+          --region {{ region }}
       register: ssm_key
       changed_when: false
 
