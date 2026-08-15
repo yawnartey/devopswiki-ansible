@@ -4,11 +4,6 @@
   become: true
 
   tasks:
-    - name: Install pip3
-      ansible.builtin.package:
-        name: python3-pip
-        state: present
-
     - name: Install Docker
       ansible.builtin.package:
         name: docker
@@ -26,8 +21,14 @@
         groups: docker
         append: true
 
-    - name: Install Docker Compose via pip
-      ansible.builtin.pip:
-        name: docker-compose
-        executable: pip3
-        state: present
+    - name: Download Docker Compose
+      ansible.builtin.get_url:
+        url: https://github.com/docker/compose/releases/download/v2.29.1/docker-compose-linux-x86_64
+        dest: /usr/local/bin/docker-compose
+        mode: "0755"
+        headers:
+          User-Agent: "curl/7.68.0"
+      register: result
+      retries: 3
+      delay: 10
+      until: result is succeeded
