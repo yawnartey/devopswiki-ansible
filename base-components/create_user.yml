@@ -1,7 +1,6 @@
 ---
 - name: Create user access
   hosts: localhost
-  connection: local
   become: true
 
   tasks:
