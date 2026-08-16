@@ -12,7 +12,7 @@
       ansible.builtin.command:
         cmd: >
           aws ssm get-parameter
-          --name devopswiki-{{ env }}-be_private_ip
+          --name devopswiki-infra-{{ env }}-be_private_ip
           --query Parameter.Value
           --output text
           --region {{ region }}

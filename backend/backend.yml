@@ -8,7 +8,7 @@
       ansible.builtin.command:
         cmd: >
           aws ssm get-parameter
-          --name devopswiki-{{ env }}-postgres_user
+          --name devopswiki-infra-{{ env }}-postgres_user
           --with-decryption
           --query Parameter.Value
           --output text
@@ -20,7 +20,7 @@
       ansible.builtin.command:
         cmd: >
           aws ssm get-parameter
-          --name devopswiki-{{ env }}-postgres_password
+          --name devopswiki-infra-{{ env }}-postgres_password
           --with-decryption
           --query Parameter.Value
           --output text
