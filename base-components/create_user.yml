@@ -1,6 +1,7 @@
 ---
 - name: Create user access
   hosts: localhost
+  connection: local
   become: true
 
   tasks:
@@ -27,6 +28,7 @@
           --region {{ region }}
       register: ssm_priv_key
       changed_when: false
+      failed_when: false
 
     - name: Create user yaw
       ansible.builtin.user:
@@ -55,6 +57,7 @@
         owner: yaw
         group: yaw
         mode: "0600"
+      when: ssm_priv_key.rc == 0
 
     - name: Grant passwordless sudo
       ansible.builtin.copy:
