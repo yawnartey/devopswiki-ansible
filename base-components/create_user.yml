@@ -28,6 +28,26 @@
       register: ssm_priv_key
       changed_when: false
 
+    - name: Create user yaw
+      ansible.builtin.user:
+        name: yaw
+        shell: /bin/bash
+        create_home: true
+
+    - name: Create .ssh directory
+      ansible.builtin.file:
+        path: /home/yaw/.ssh
+        state: directory
+        owner: yaw
+        group: yaw
+        mode: "0700"
+
+    - name: Add authorized key
+      ansible.posix.authorized_key:
+        user: yaw
+        key: "{{ ssm_key.stdout }}"
+        state: present
+
     - name: Write private key
       ansible.builtin.copy:
         dest: /home/yaw/.ssh/priv_key
@@ -35,18 +55,6 @@
         owner: yaw
         group: yaw
         mode: "0600"
-
-    - name: Create user yaw
-      ansible.builtin.user:
-        name: yaw
-        shell: /bin/bash
-        create_home: true
-
-    - name: Add authorized key
-      ansible.posix.authorized_key:
-        user: yaw
-        key: "{{ ssm_key.stdout }}"
-        state: present
 
     - name: Grant passwordless sudo
       ansible.builtin.copy:
