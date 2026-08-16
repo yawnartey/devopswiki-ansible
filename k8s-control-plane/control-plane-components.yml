@@ -1,0 +1,197 @@
+---
+- name: Setup Kubernetes control plane node
+  hosts: localhost
+  connection: local
+  become: true
+
+  tasks:
+    - name: Disable swap immediately
+      ansible.builtin.command: swapoff -a
+      changed_when: false
+
+    - name: Disable swap on boot
+      ansible.builtin.replace:
+        path: /etc/fstab
+        regexp: '^([^#].*\s+swap\s+.*)$'
+        replace: '#\1'
+
+    - name: Load br_netfilter module
+      community.general.modprobe:
+        name: br_netfilter
+        state: present
+
+    - name: Set sysctl parameters for Kubernetes networking
+      ansible.posix.sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        sysctl_file: /etc/sysctl.d/99-kubernetes-cri.conf
+        reload: true
+      loop:
+        - { name: net.bridge.bridge-nf-call-ip6tables, value: "1" }
+        - { name: net.bridge.bridge-nf-call-iptables, value: "1" }
+        - { name: net.ipv4.ip_forward, value: "1" }
+
+    - name: Set SELinux to permissive immediately
+      ansible.builtin.command: setenforce 0
+      changed_when: false
+      failed_when: false
+
+    - name: Set SELinux to permissive on boot
+      ansible.builtin.replace:
+        path: /etc/selinux/config
+        regexp: "^SELINUX=enforcing"
+        replace: "SELINUX=permissive"
+
+    - name: Install containerd
+      ansible.builtin.package:
+        name: containerd
+        state: present
+
+    - name: Create containerd config directory
+      ansible.builtin.file:
+        path: /etc/containerd
+        state: directory
+        mode: "0755"
+
+    - name: Generate default containerd config
+      ansible.builtin.command: containerd config default
+      register: containerd_config
+      changed_when: false
+
+    - name: Write containerd config
+      ansible.builtin.copy:
+        dest: /etc/containerd/config.toml
+        content: "{{ containerd_config.stdout }}"
+        mode: "0644"
+
+    - name: Enable SystemdCgroup in containerd config
+      ansible.builtin.replace:
+        path: /etc/containerd/config.toml
+        regexp: "SystemdCgroup = false"
+        replace: "SystemdCgroup = true"
+
+    - name: Enable and restart containerd
+      ansible.builtin.systemd:
+        name: containerd
+        enabled: true
+        state: restarted
+
+    - name: Add Kubernetes yum repository
+      ansible.builtin.yum_repository:
+        name: kubernetes
+        description: Kubernetes
+        baseurl: https://pkgs.k8s.io/core:/stable:/v1.29/rpm/
+        enabled: true
+        gpgcheck: true
+        gpgkey: https://pkgs.k8s.io/core:/stable:/v1.29/rpm/repodata/repomd.xml.key
+
+    - name: Install kubelet, kubeadm and kubectl
+      ansible.builtin.yum:
+        name:
+          - kubelet
+          - kubeadm
+          - kubectl
+        state: present
+        disable_excludes: kubernetes
+
+    - name: Enable and start kubelet
+      ansible.builtin.systemd:
+        name: kubelet
+        enabled: true
+        state: started
+
+    - name: Initialise the control plane
+      ansible.builtin.command:
+        cmd: >
+          kubeadm init
+          --apiserver-advertise-address={{ ansible_default_ipv4.address }}
+          --pod-network-cidr=192.168.0.0/16
+        creates: /etc/kubernetes/admin.conf
+      register: kubeadm_init
+
+    - name: Save kubeadm init log
+      ansible.builtin.copy:
+        dest: /root/kubeadm-init.log
+        content: "{{ kubeadm_init.stdout }}"
+      when: kubeadm_init is changed
+
+    - name: Extract kubeadm join command
+      ansible.builtin.shell:
+        cmd: grep -A2 "kubeadm join" /root/kubeadm-init.log
+      register: join_command
+      changed_when: false
+      when: kubeadm_init is changed
+
+    - name: Write join file for worker nodes
+      ansible.builtin.copy:
+        dest: /home/yaw/kubeadm-join.txt
+        content: "{{ join_command.stdout }}\n"
+        owner: yaw
+        group: yaw
+        mode: "0600"
+      when: kubeadm_init is changed
+
+    - name: Create .kube directory for yaw
+      ansible.builtin.file:
+        path: /home/yaw/.kube
+        state: directory
+        owner: yaw
+        group: yaw
+        mode: "0755"
+
+    - name: Copy kubeconfig for yaw
+      ansible.builtin.copy:
+        src: /etc/kubernetes/admin.conf
+        dest: /home/yaw/.kube/config
+        remote_src: true
+        owner: yaw
+        group: yaw
+        mode: "0600"
+
+    - name: Create .kube directory for root
+      ansible.builtin.file:
+        path: /root/.kube
+        state: directory
+        mode: "0755"
+
+    - name: Copy kubeconfig for root
+      ansible.builtin.copy:
+        src: /etc/kubernetes/admin.conf
+        dest: /root/.kube/config
+        remote_src: true
+        mode: "0600"
+
+    - name: Install Calico CNI
+      ansible.builtin.command:
+        cmd: kubectl apply -f https://projectcalico.docs.tigera.io/manifests/calico.yaml
+      become_user: yaw
+      environment:
+        KUBECONFIG: /home/yaw/.kube/config
+      changed_when: true
+
+    - name: Install metrics server
+      ansible.builtin.command:
+        cmd: kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+      become_user: yaw
+      environment:
+        KUBECONFIG: /home/yaw/.kube/config
+      changed_when: true
+
+    - name: Patch metrics server for self-signed kubelet certs
+      ansible.builtin.command:
+        cmd: >
+          kubectl patch deployment metrics-server -n kube-system
+          --type=json
+          -p='[{"op": "add", "path": "/spec/template/spec/containers/0/args/-", "value": "--kubelet-insecure-tls"}]'
+      become_user: yaw
+      environment:
+        KUBECONFIG: /home/yaw/.kube/config
+      changed_when: true
+
+    - name: Install EBS CSI driver
+      ansible.builtin.command:
+        cmd: kubectl apply -k github.com/kubernetes-sigs/aws-ebs-csi-driver/deploy/kubernetes/overlays/stable/?ref=release-1.36
+      become_user: yaw
+      environment:
+        KUBECONFIG: /home/yaw/.kube/config
+      changed_when: true
